@@ -1,0 +1,17 @@
+[Unit]
+Description=WebRTC Screen Share Server
+After=network.target
+
+[Service]
+Type=simple
+User=screenshare
+WorkingDirectory=/opt/screenshare
+ExecStart=/opt/screenshare/screenshare-rs
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment="RUST_LOG=info"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  screenshare:
+    build: .
+    container_name: screenshare-rs
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info
+    restart: unless-stopped
+    # 如果需要持久化日志，可以取消注释下面的行
+    # volumes:
+    #   - ./logs:/app/logs

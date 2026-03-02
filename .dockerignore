@@ -1,0 +1,13 @@
+.git
+.gitignore
+target
+Dockerfile
+docker-compose.yml
+DEPLOY.md
+README.md
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode
+.idea
