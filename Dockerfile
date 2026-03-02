@@ -3,10 +3,20 @@ FROM rust:latest as builder
 
 WORKDIR /app
 
-# 复制源代码
-COPY . .
+# 先只复制 Cargo.toml 和 Cargo.lock，让依赖缓存分离
+COPY Cargo.toml Cargo.lock ./
 
-# 编译release版本
+# 创建一个虚拟的 main.rs 来预编译依赖
+RUN mkdir -p src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# 复制源代码（只有代码改变时才重新编译）
+COPY src ./src
+COPY static ./static
+
+# 编译 release 版本
 RUN cargo build --release
 
 # 运行阶段
