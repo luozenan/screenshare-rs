@@ -3,8 +3,8 @@ FROM rust:latest as builder
 
 WORKDIR /app
 
-# 先只复制 Cargo.toml 和 Cargo.lock，让依赖缓存分离
-COPY Cargo.toml Cargo.lock ./
+# 先只复制 Cargo.toml 和 Cargo.lock（如果存在），让依赖缓存分离
+COPY Cargo.toml Cargo.lock* ./
 
 # 创建一个虚拟的 main.rs 来预编译依赖
 RUN mkdir -p src && \
