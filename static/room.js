@@ -66,18 +66,18 @@ function connectToSignalingServer() {
     ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
-        console.log('✅ 已连接到信令服务器');
+
         if (connectionStatus) connectionStatus.textContent = '已连接';
     };
     
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log('📥 收到消息:', data);
+
         
         // 分发消息
         if (data.type === 'assigned') {
             userId = data.id;
-            console.log('✅ 分配用户ID:', userId);
+
             
             // 加入房间
             sendMessage({
@@ -103,12 +103,12 @@ function connectToSignalingServer() {
     };
     
     ws.onerror = (error) => {
-        console.error('❌ WebSocket错误:', error);
+
         if (connectionStatus) connectionStatus.textContent = '连接错误';
     };
     
     ws.onclose = () => {
-        console.log('❌ 信令服务器断开');
+
         if (connectionStatus) connectionStatus.textContent = '已断开';
         setTimeout(connectToSignalingServer, 3000);
     };
@@ -116,7 +116,7 @@ function connectToSignalingServer() {
 
 function sendMessage(msg) {
     if (ws && ws.readyState === WebSocket.OPEN) {
-        console.log('📤 发送消息:', msg.type);
+
         ws.send(JSON.stringify(msg));
     }
 }
@@ -129,7 +129,7 @@ async function startScreenShare() {
     }
     
     try {
-        console.log('🎬 开始屏幕共享...');
+
         showToast('正在请求屏幕权限...');
         
         // 获取屏幕流
@@ -142,7 +142,7 @@ async function startScreenShare() {
             audio: false
         });
         
-        console.log('✅ 获取屏幕流成功');
+
         
         // 标记为共享者
         isSharing = true;
@@ -162,7 +162,7 @@ async function startScreenShare() {
         // 延迟一秒后为所有现有的peer创建Offer
         // 这样可以确保观看者有时间接收 sharing-start 消息
         setTimeout(() => {
-            console.log('📢 为所有观看者创建Offer');
+
             peers.forEach((_peerData, remoteUserId) => {
                 createAndSendOffer(remoteUserId);
             });
@@ -177,7 +177,7 @@ async function startScreenShare() {
         myStream.getVideoTracks()[0].onended = stopScreenShare;
         
     } catch (err) {
-        console.error('❌ 屏幕共享失败:', err);
+
         if (err.name === 'NotAllowedError') {
             showToast('您拒绝了屏幕共享权限');
         } else if (err.name === 'NotFoundError') {
@@ -189,7 +189,7 @@ async function startScreenShare() {
 }
 
 async function stopScreenShare() {
-    console.log('🛑 停止屏幕共享');
+
     
     // 停止所有流
     if (myStream) {
@@ -238,7 +238,7 @@ function copyRoomLink() {
 // ========== WebRTC 信令处理 ==========
 async function handleOffer(message) {
     const { from, sdp } = message;
-    console.log('📨 收到Offer来自:', from);
+
     
     if (!peers.has(from)) {
         peers.set(from, { pc: null, stream: null, video: null });
@@ -248,7 +248,7 @@ async function handleOffer(message) {
     
     // 如果已有活跃连接，跳过重复Offer
     if (peerData.pc && peerData.pc.connectionState !== 'closed') {
-        console.log('⚠️ 已有活跃连接，跳过重复Offer');
+
         return;
     }
     
@@ -259,12 +259,12 @@ async function handleOffer(message) {
         // 设置远程Offer
         const sessionDesc = new RTCSessionDescription({ type: 'offer', sdp });
         await peerData.pc.setRemoteDescription(sessionDesc);
-        console.log('✅ 设置远程Offer成功');
+
         
         // 创建Answer
         const answer = await peerData.pc.createAnswer();
         await peerData.pc.setLocalDescription(answer);
-        console.log('✅ 创建Answer成功');
+
         
         // 发送Answer
         sendMessage({
@@ -283,24 +283,24 @@ async function handleOffer(message) {
             iceCandidateBuffers.delete(from);
         }
     } catch (error) {
-        console.error('❌ handleOffer错误:', error.message);
+
         showToast('处理Offer失败: ' + error.message, 'error');
     }
 }
 
 async function handleAnswer(message) {
     const { from, sdp } = message;
-    console.log('📩 收到Answer来自:', from);
+
     
     if (!peers.has(from)) {
-        console.error('❌ 未找到对应的Peer:', from);
+
         return;
     }
     
     const peerData = peers.get(from);
     const sessionDesc = new RTCSessionDescription({ type: 'answer', sdp });
     await peerData.pc.setRemoteDescription(sessionDesc);
-    console.log('✅ 设置远程Answer成功');
+
 }
 
 async function handleIceCandidate(message) {
@@ -312,7 +312,7 @@ async function handleIceCandidate(message) {
             iceCandidateBuffers.set(from, []);
         }
         iceCandidateBuffers.get(from).push(candidate);
-        console.log('📌 缓冲ICE候选');
+
         return;
     }
     
@@ -324,7 +324,7 @@ async function handleIceCandidate(message) {
 
 function handleUserConnected(message) {
     const { userId: connectedUserId } = message;
-    console.log('👥 用户已连接:', connectedUserId);
+
     
     // 如果当前用户在共享，为新用户创建Offer
     if (isSharing && myStream) {
@@ -336,7 +336,7 @@ function handleUserConnected(message) {
 
 function handleUserDisconnected(message) {
     const { userId: disconnectedUserId } = message;
-    console.log('👤 用户已断开:', disconnectedUserId);
+
     
     if (peers.has(disconnectedUserId)) {
         const peerData = peers.get(disconnectedUserId);
@@ -371,7 +371,7 @@ function handleUserDisconnected(message) {
 function handleSharingStart(message) {
     const { userId: sharerUserId } = message;
     if (sharerUserId !== userId) {
-        console.log('🎬 用户开始共享屏幕:', sharerUserId);
+
         
         // 如果当前用户不在共享，则为共享者创建连接
         if (!isSharing) {
@@ -383,7 +383,7 @@ function handleSharingStart(message) {
 function handleSharingStop(message) {
     const { userId: sharerUserId } = message;
     if (sharerUserId !== userId) {
-        console.log('🛑 用户停止共享屏幕:', sharerUserId);
+
         
         // 关闭该用户的连接
         if (peers.has(sharerUserId)) {
@@ -410,9 +410,9 @@ function handleSharingStop(message) {
                         videoContainer.remove();
                     }
                 }, 300);
-                console.log('✅ 视频元素已移除:', videoContainerId);
+
             } else {
-                console.warn('⚠️ 未找到视频元素:', videoContainerId);
+
             }
         }
         
@@ -436,12 +436,12 @@ function createPeerConnection(remoteUserId) {
         myStream.getTracks().forEach(track => {
             pc.addTrack(track, myStream);
         });
-        console.log('✅ 向PC添加本地媒体轨道');
+
     }
     
     // 处理远程轨道
     pc.ontrack = (event) => {
-        console.log('🎬 收到远程轨道:', event.track.kind);
+
         
         const peerData = peers.get(remoteUserId);
         if (peerData) {
@@ -458,10 +458,10 @@ function createPeerConnection(remoteUserId) {
             
             // 确保视频开始播放
             peerData.video.play().catch(err => {
-                console.warn('⚠️ 视频播放失败:', err.message);
+
             });
             
-            console.log('✅ 视频流已绑定');
+
         }
     };
     
@@ -479,14 +479,14 @@ function createPeerConnection(remoteUserId) {
     
     // 处理连接状态变化
     pc.onconnectionstatechange = () => {
-        console.log('🔗 连接状态:', pc.connectionState);
+
     };
     
     return pc;
 }
 
 async function createAndSendOffer(remoteUserId) {
-    console.log('📤 为用户' + remoteUserId + '创建Offer');
+
     
     if (!peers.has(remoteUserId)) {
         peers.set(remoteUserId, { pc: null, stream: null, video: null });
@@ -496,7 +496,7 @@ async function createAndSendOffer(remoteUserId) {
     
     // 如果已有活跃连接，跳过重复创建
     if (peerData.pc && peerData.pc.connectionState !== 'closed') {
-        console.log('⚠️ 已有活跃连接，跳过重复Offer');
+
         return;
     }
     
@@ -509,7 +509,7 @@ async function createAndSendOffer(remoteUserId) {
             offerToReceiveAudio: false
         });
         await peerData.pc.setLocalDescription(offer);
-        console.log('✅ 创建Offer成功，已配置接收视频');
+
         
         sendMessage({
             type: 'offer',
@@ -518,7 +518,7 @@ async function createAndSendOffer(remoteUserId) {
             roomId: roomId
         });
     } catch (error) {
-        console.error('❌ createAndSendOffer错误:', error.message);
+
         showToast('创建Offer失败: ' + error.message, 'error');
     }
 }
@@ -552,7 +552,7 @@ function createVideoElement(label, autoplay = false) {
     container.appendChild(labelEl);
     videoGrid.appendChild(container);
     
-    console.log('📹 创建视频元素，ID:', containerId);
+
     return video;
 }
 
