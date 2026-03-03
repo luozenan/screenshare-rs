@@ -10,20 +10,24 @@ const peers = new Map(); // userId -> { pc, stream, video }
 const iceCandidateBuffers = new Map(); // userId -> ICE候选缓冲
 
 // ========== UI 元素 ==========
-const videoGrid = document.getElementById('videoGrid');
-const startShareBtn = document.getElementById('startShare');
-const copyLinkBtn = document.getElementById('copyLink');
-const endShareBtn = document.getElementById('endShare');
-const backHomeBtn = document.getElementById('backHome');
-const roomInfo = document.getElementById('roomInfo');
-const roomCode = document.getElementById('roomCode');
-const toast = document.getElementById('toast');
-const connectionStatus = document.getElementById('connectionStatus');
-const userCountEl = document.getElementById('userCount');
-const roleStatus = document.getElementById('roleStatus');
+let videoGrid, startShareBtn, copyLinkBtn, endShareBtn, exitMeetingBtn;
+let roomInfo, roomCode, toast, connectionStatus, userCountEl, roleStatus;
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', () => {
+    // 获取UI元素
+    videoGrid = document.getElementById('videoGrid');
+    startShareBtn = document.getElementById('startShare');
+    copyLinkBtn = document.getElementById('copyLink');
+    endShareBtn = document.getElementById('endShare');
+    exitMeetingBtn = document.getElementById('exitMeeting');
+    roomInfo = document.getElementById('roomInfo');
+    roomCode = document.getElementById('roomCode');
+    toast = document.getElementById('toast');
+    connectionStatus = document.getElementById('connectionStatus');
+    userCountEl = document.getElementById('userCount');
+    roleStatus = document.getElementById('roleStatus');
+    
     // 获取房间ID
     const params = new URLSearchParams(window.location.search);
     roomId = params.get('room');
@@ -37,16 +41,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // 显示房间信息
-    roomInfo.style.display = 'block';
-    roomCode.textContent = decodeURIComponent(roomId);
+    if (roomInfo) {
+        roomInfo.style.display = 'block';
+    }
+    if (roomCode) {
+        roomCode.textContent = decodeURIComponent(roomId);
+    }
     
     // 绑定按钮事件
     startShareBtn.addEventListener('click', startScreenShare);
     copyLinkBtn.addEventListener('click', copyRoomLink);
     endShareBtn.addEventListener('click', stopScreenShare);
-    backHomeBtn.addEventListener('click', () => {
-        window.location.href = 'create-room.html';
-    });
+    exitMeetingBtn.addEventListener('click', exitMeeting);
     
     // 连接信令服务器
     connectToSignalingServer();
@@ -61,7 +67,7 @@ function connectToSignalingServer() {
     
     ws.onopen = () => {
         console.log('✅ 已连接到信令服务器');
-        connectionStatus.textContent = '已连接';
+        if (connectionStatus) connectionStatus.textContent = '已连接';
     };
     
     ws.onmessage = (event) => {
@@ -98,12 +104,12 @@ function connectToSignalingServer() {
     
     ws.onerror = (error) => {
         console.error('❌ WebSocket错误:', error);
-        connectionStatus.textContent = '连接错误';
+        if (connectionStatus) connectionStatus.textContent = '连接错误';
     };
     
     ws.onclose = () => {
         console.log('❌ 信令服务器断开');
-        connectionStatus.textContent = '已断开';
+        if (connectionStatus) connectionStatus.textContent = '已断开';
         setTimeout(connectToSignalingServer, 3000);
     };
 }
@@ -140,7 +146,7 @@ async function startScreenShare() {
         
         // 标记为共享者
         isSharing = true;
-        roleStatus.textContent = '共享者';
+        if (roleStatus) roleStatus.textContent = '共享者';
         
         // 创建本地视频元素
         myVideo = createVideoElement('我的屏幕', true);
@@ -204,7 +210,7 @@ async function stopScreenShare() {
     
     // 标记为观看者
     isSharing = false;
-    roleStatus.textContent = '观看者';
+    if (roleStatus) roleStatus.textContent = '观看者';
     
     // 通知其他用户屏幕共享结束
     sendMessage({
@@ -552,7 +558,7 @@ function createVideoElement(label, autoplay = false) {
 
 function updateUserCount() {
     const count = peers.size + 1; // 加上自己
-    userCountEl.textContent = count;
+    if (userCountEl) userCountEl.textContent = count;
 }
 
 function showToast(message, type = 'info') {
@@ -562,4 +568,28 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.classList.remove('show');
     }, 3000);
+}
+
+function exitMeeting() {
+    // 关闭所有peer连接
+    peers.forEach((peerData) => {
+        if (peerData.pc) {
+            peerData.pc.close();
+        }
+    });
+    peers.clear();
+    
+    // 停止本地流
+    if (myStream) {
+        myStream.getTracks().forEach(track => track.stop());
+        myStream = null;
+    }
+    
+    // 关闭WebSocket连接
+    if (ws) {
+        ws.close();
+    }
+    
+    // 关闭当前标签页
+    window.close();
 }
