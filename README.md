@@ -239,6 +239,3 @@ netstat -tulpn | grep 3000
 ---
 
 **祝你使用愉快！** 🚀
-
-分享按钮
-https://img.icons8.com/ios/50/share-3.png
