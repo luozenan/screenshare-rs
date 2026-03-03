@@ -21,6 +21,6 @@ pkill -f "target/release/screenshare-rs" 2>/dev/null
 sleep 1
 
 # 在后台启动项目
-./target/release/screenshare-rs &
+nohup ./target/release/screenshare-rs >/dev/null 2>&1 &
 
 echo "项目已在后台启动！"
