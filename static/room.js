@@ -511,7 +511,7 @@ function createVideoElement(label, autoplay = false) {
   const maximizeBtn = document.createElement("button");
   maximizeBtn.className = "maximize-btn";
   maximizeBtn.innerHTML = '<img src="icons/max.svg" alt="最大化">';
-  maximizeBtn.title = "最大化";
+  maximizeBtn.setAttribute("data-tooltip", "最大化");
   maximizeBtn.style.cssText = `
         position: absolute;
         bottom: 10px;
@@ -575,6 +575,38 @@ function toggleMaximize(container) {
 
     // 恢复视频网格布局
     videoGrid.style.cssText = "";
+
+    // 恢复最大化按钮的属性和样式
+    const maximizeBtn = container.querySelector(".maximize-btn");
+    if (maximizeBtn) {
+      maximizeBtn.innerHTML = '<img src="icons/max.svg" alt="最大化">';
+      maximizeBtn.setAttribute("data-tooltip", "最大化");
+      maximizeBtn.style.cssText = `
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.2s;
+      `;
+
+      // 为图标添加样式
+      maximizeBtn.querySelector("img").style.cssText = `
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+        filter: brightness(0) invert(1);
+      `;
+    }
   } else {
     // 最大化当前容器
     container.classList.add("maximized");
@@ -610,7 +642,7 @@ function toggleMaximize(container) {
     const maximizeBtn = container.querySelector(".maximize-btn");
     if (maximizeBtn) {
       maximizeBtn.innerHTML = '<img src="icons/max.svg" alt="恢复">';
-      maximizeBtn.title = "恢复";
+      maximizeBtn.setAttribute("data-tooltip", "恢复");
       maximizeBtn.style.cssText = `
         position: absolute;
         bottom: 20px;
