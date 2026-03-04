@@ -125,15 +125,67 @@ async function startScreenShare() {
   try {
     showToast("正在请求屏幕权限...");
 
-    // 获取屏幕流
+    // 获取屏幕流（尝试获取系统音频）
+    // 注意：对于Linux系统，可能需要调整分辨率约束以提高兼容性
+    const videoConstraints = {
+      cursor: "always",
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30, max: 60 }, // 显式设置帧率以提高兼容性
+    };
+    
     myStream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        cursor: "always",
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-      },
-      audio: false,
+      video: videoConstraints,
+      audio: true,
     });
+
+    // 诊断：检查是否获取到了音频轨道
+    console.log('📊 本地屏幕共享流信息:');
+    console.log(`  📹 视频轨道: ${myStream.getVideoTracks().length} 个`);
+    console.log(`  🎤 音频轨道: ${myStream.getAudioTracks().length} 个`);
+    
+    // 检查视频轨道的设置
+    myStream.getVideoTracks().forEach((track, idx) => {
+      const settings = track.getSettings();
+      console.log(`  [视频${idx}] 分辨率: ${settings.width}x${settings.height}, 帧率: ${settings.frameRate}`);
+    });
+    
+    // 临时：保存系统音频的原始信息用于诊断
+    const systemAudioTracks = myStream.getAudioTracks();
+    const hasSystemAudio = systemAudioTracks.length > 0;
+    if (hasSystemAudio) {
+      console.log(`  ℹ️  检测到系统音频，详情：`);
+      systemAudioTracks.forEach((track, idx) => {
+        const settings = track.getSettings ? track.getSettings() : {};
+        console.log(`    [系统音频${idx}] ${track.label} - 采样率: ${settings.sampleRate || '?'}, 通道: ${settings.channelCount || '?'}`);
+      });
+    } else {
+      console.log(`  ⚠️  系统未提供音频轨道（这在Linux上很常见）`);
+    }
+    
+    // 统一处理音频轨道：不管有没有系统音频，都移除所有音频轨道再添加静音轨道
+    // 这样做是为了避免音频协商导致的兼容性问题
+    myStream.getAudioTracks().forEach(track => {
+      track.stop();
+      myStream.removeTrack(track);
+    });
+    
+    // 添加静音音频轨道供WebRTC传输（某些浏览器要求音频轨道存在）
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const dest = audioContext.createMediaStreamDestination();
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      gain.gain.setValueAtTime(0, audioContext.currentTime);
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start();
+      const audioTrack = dest.stream.getAudioTracks()[0];
+      myStream.addTrack(audioTrack);
+      console.log(`  ✅ 已添加标准化静音音频轨道（替代${hasSystemAudio ? '系统音频' : '缺失的音频'}）`);
+    } catch (err) {
+      console.warn(`  ⚠️  无法添加音频轨道: ${err.message}`);
+    }
 
     // 标记为共享者
     isSharing = true;
@@ -243,12 +295,20 @@ async function handleOffer(message) {
     // 创建Peer连接
     peerData.pc = createPeerConnection(from);
 
+    // 优化接收的Offer的SDP，强制使用H264
+    const optimizedSdp = forceH264Encoding(sdp);
+    
     // 设置远程Offer
-    const sessionDesc = new RTCSessionDescription({ type: "offer", sdp });
+    const sessionDesc = new RTCSessionDescription({ type: "offer", sdp: optimizedSdp });
     await peerData.pc.setRemoteDescription(sessionDesc);
 
     // 创建Answer
     const answer = await peerData.pc.createAnswer();
+    
+    // 优化发送的Answer的SDP，强制使用H264
+    const optimizedAnswerSdp = forceH264Encoding(answer.sdp);
+    answer.sdp = optimizedAnswerSdp;
+    
     await peerData.pc.setLocalDescription(answer);
 
     // 发送Answer
@@ -279,8 +339,11 @@ async function handleAnswer(message) {
     return;
   }
 
+  // 优化接收的Answer的SDP，强制使用H264
+  const optimizedSdp = forceH264Encoding(sdp);
+  
   const peerData = peers.get(from);
-  const sessionDesc = new RTCSessionDescription({ type: "answer", sdp });
+  const sessionDesc = new RTCSessionDescription({ type: "answer", sdp: optimizedSdp });
   await peerData.pc.setRemoteDescription(sessionDesc);
 }
 
@@ -407,7 +470,11 @@ function createPeerConnection(remoteUserId) {
   // 如果当前用户在共享，添加本地流轨道
   if (isSharing && myStream) {
     myStream.getTracks().forEach((track) => {
-      pc.addTrack(track, myStream);
+      try {
+        pc.addTrack(track, myStream);
+      } catch (err) {
+        console.error(`❌ 添加轨道失败 (${track.kind}): ${err.message}`);
+      }
     });
   }
 
@@ -416,18 +483,80 @@ function createPeerConnection(remoteUserId) {
     const peerData = peers.get(remoteUserId);
     if (peerData) {
       const stream = event.streams[0];
+      
+      // 使用track的trackId而不是stream来进行去重，避免同一轨道多次处理
+      const trackId = event.track.id;
+      if (!peerData.processedTracks) {
+        peerData.processedTracks = new Set();
+      }
+      
+      // 如果已经处理过这个轨道，跳过
+      if (peerData.processedTracks.has(trackId)) {
+        console.log(`⏭️  跳过已处理的轨道: ${trackId.substring(0, 8)}`);
+        return;
+      }
+      peerData.processedTracks.add(trackId);
+      
       peerData.stream = stream;
+      
+      // 打印音频轨道信息
+      const audioTracks = stream.getAudioTracks();
+      const videoTracks = stream.getVideoTracks();
+      console.log(`📡 远程用户 ${remoteUserId.substring(0, 8)} 的流信息:`);
+      console.log(`  📹 视频轨道: ${videoTracks.length} 个`);
+      console.log(`  🎤 音频轨道: ${audioTracks.length} 个`);
+      if (audioTracks.length > 0) {
+        audioTracks.forEach((track, idx) => {
+          console.log(`    [${idx}] ${track.label || '未命名'} (enabled: ${track.enabled})`);
+        });
+      } else {
+        console.log(`    ⚠️  没有音频轨道`);
+      }
+      
+      // 诊断视频轨道信息
+      if (videoTracks.length > 0) {
+        videoTracks.forEach((track, idx) => {
+          // 视频编码参数在SDP协商后才能获取，延迟获取
+          const settings = track.getSettings ? track.getSettings() : {};
+          console.log(`    [视频${idx}] ${track.label || '未命名'} (received)`);
+        });
+      }
 
       // 如果视频元素还未创建，创建它
       if (!peerData.video) {
         const label = "共享屏幕 " + remoteUserId.substring(0, 8);
         peerData.video = createVideoElement(label, true);
+        
+        // 在视频加载完成后检查分辨率
+        peerData.video.onloadedmetadata = () => {
+          const videoTracks = stream.getVideoTracks();
+          videoTracks.forEach((track, idx) => {
+            const settings = track.getSettings ? track.getSettings() : {};
+            if (settings.width && settings.height) {
+              console.log(`    ✅ [视频${idx}] 分辨率已确定: ${settings.width}x${settings.height}`);
+            }
+          });
+        };
       }
 
-      peerData.video.srcObject = stream;
+      // 只在还没有srcObject时才设置，避免重复赋值
+      if (peerData.video.srcObject !== stream) {
+        peerData.video.srcObject = stream;
+      }
 
-      // 确保视频开始播放
-      peerData.video.play().catch((err) => {});
+      // 确保视频开始播放（添加错误处理）
+      // 使用Promise.catch而不是catch()来处理，并检查video的paused状态
+      if (peerData.video.paused) {
+        peerData.video.play()
+          .catch((err) => {
+            // "interrupted by new load request" 是正常的，不需要特别处理
+            if (err.name === 'NotAllowedError' || err.name === 'NotSupportedError') {
+              console.error(`❌ 视频播放失败: ${err.message}`);
+            } else if (err.message && err.message.includes('interrupted')) {
+              console.log(`⏸️  视频播放中被新的加载请求中断（正常现象）`);
+            }
+          });
+      }
     }
   };
 
@@ -444,9 +573,102 @@ function createPeerConnection(remoteUserId) {
   };
 
   // 处理连接状态变化
-  pc.onconnectionstatechange = () => {};
+  pc.onconnectionstatechange = () => {
+    console.log(`🔗 连接状态 ${remoteUserId.substring(0, 8)}: ${pc.connectionState}`);
+    
+    // 仅在连接成功建立时诊断一次SDP信息，避免重复输出
+    if (pc.connectionState === 'connected' && pc.remoteDescription && !pc._sdpLogged) {
+      pc._sdpLogged = true;  // 标记已记录
+      const remoteSdp = pc.remoteDescription.sdp;
+      
+      console.log(`\n📊 === 远程端(观看者)编码格式 ===`);
+      const lines = remoteSdp.split('\n');
+      let inVideoSection = false;
+      
+      for (const line of lines) {
+        // 找video媒体线
+        if (line.startsWith('m=video')) {
+          inVideoSection = true;
+          const parts = line.split(' ');
+          const formats = parts.slice(3); // 获取所有PayloadType
+          console.log(`📹 视频媒体行: ${line}`);
+          console.log(`  支持的编码列表 (按优先级): ${formats.join(', ')}`);
+        }
+        // 获取编码详情
+        else if (inVideoSection && line.startsWith('a=rtpmap:')) {
+          console.log(`  ${line}`);
+        }
+        // 到下一个媒体段时停止
+        else if (inVideoSection && line.startsWith('m=') && !line.startsWith('m=video')) {
+          break;
+        }
+      }
+      
+      // 检查是否支持H264
+      if (remoteSdp.includes('H264')) console.log(`  ✅ 支持 H264`);
+      if (remoteSdp.includes('VP8')) console.log(`  ✅ 支持 VP8`);
+      if (remoteSdp.includes('VP9')) console.log(`  ✅ 支持 VP9`);
+      console.log(`\n`);
+    }
+  };
 
   return pc;
+}
+
+// ========== SDP 编码优化 ==========
+// 将H264编码优先级提到最高以提高跨平台兼容性
+function forceH264Encoding(sdp) {
+  const lines = sdp.split('\n');
+  const result = [];
+  let h264PayloadType = null;
+  
+  // 第一遍：找到H264对应的PayloadType 
+  for (const line of lines) {
+    const rtpmapMatch = line.match(/a=rtpmap:(\d+)\s+H264/i);
+    if (rtpmapMatch) {
+      h264PayloadType = rtpmapMatch[1];
+      console.log(`🎬 找到H264编码: PayloadType=${h264PayloadType}`);
+      break;
+    }
+  }
+  
+  // 如果找不到H264，直接返回原SDP
+  if (!h264PayloadType) {
+    console.warn(`⚠️  未找到H264编码，保持原有编码格式`);
+    return sdp;
+  }
+  
+  // 第二遍：只修改video媒体行，将H264移到最前面
+  let inVideoSection = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // 检测视频媒体行
+    if (line.startsWith('m=video')) {
+      inVideoSection = true;
+      // 修改格式列表，将H264的PayloadType移到最前面
+      const parts = line.split(' ');
+      const mediaLine = parts.slice(0, 3); // m=video 端口 proto
+      const formats = parts.slice(3); // 所有PayloadType
+      
+      // 移除H264的PayloadType
+      const h264Index = formats.indexOf(h264PayloadType);
+      if (h264Index !== -1) {
+        formats.splice(h264Index, 1);
+        formats.unshift(h264PayloadType); // 放到最前面
+        console.log(`✅ 设置H264为首选编码，优先级: ${formats.slice(0, 5).join(', ')}${formats.length > 5 ? ', ...' : ''}`);
+      }
+      
+      result.push(mediaLine.join(' ') + ' ' + formats.join(' '));
+    } else if (line.startsWith('m=') && !line.startsWith('m=video')) {
+      inVideoSection = false;
+      result.push(line);
+    } else {
+      result.push(line);
+    }
+  }
+  
+  return result.join('\n');
 }
 
 async function createAndSendOffer(remoteUserId) {
@@ -464,11 +686,31 @@ async function createAndSendOffer(remoteUserId) {
   try {
     peerData.pc = createPeerConnection(remoteUserId);
 
-    // 创建Offer并明确表示要接收视频
+    // 创建Offer并明确表示要接收视频和音频
     const offer = await peerData.pc.createOffer({
       offerToReceiveVideo: true,
-      offerToReceiveAudio: false,
+      offerToReceiveAudio: true,
     });
+    
+    // 打印本地(共享者)的编码格式
+    console.log(`\n📊 === 本地端(共享者)编码格式 ===`);
+    const lines = offer.sdp.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('m=video')) {
+        const parts = line.split(' ');
+        const formats = parts.slice(3);
+        console.log(`📹 视频媒体行: ${line}`);
+        console.log(`  支持的编码列表 (按优先级): ${formats.join(', ')}`);
+      } else if (line.startsWith('a=rtpmap:') && lines.indexOf(line) > lines.findIndex(l => l.startsWith('m=video'))) {
+        console.log(`  ${line}`);
+      }
+    }
+    console.log(`\n`);
+    
+    // 强制使用H264编码以提高跨平台兼容性（特别是MacBook Pro）
+    const modifiedSdp = forceH264Encoding(offer.sdp);
+    offer.sdp = modifiedSdp;
+    
     await peerData.pc.setLocalDescription(offer);
 
     sendMessage({
@@ -477,7 +719,10 @@ async function createAndSendOffer(remoteUserId) {
       sdp: offer.sdp,
       roomId: roomId,
     });
+    
+    console.log(`✅ 已向 ${remoteUserId.substring(0, 8)} 发送Offer (使用H264编码)`);
   } catch (error) {
+    console.error(`❌ 创建Offer失败: ${error.message}`);
     showToast("创建Offer失败: " + error.message, "error");
   }
 }
