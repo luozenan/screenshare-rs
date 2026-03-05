@@ -1,135 +1,140 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>创建房间 - WebRTC 屏幕共享</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' fill='%23667eea'>W</text></svg>" />
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: Arial, sans-serif;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            width: 100%;
-            max-width: 400px;
-        }
-        
-        h1 {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #333;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: bold;
-        }
-        
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 4px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        button {
-            width: 100%;
-            padding: 12px;
-            background-color: #667eea;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        
-        button:hover {
-            background-color: #5568d3;
-        }
-        
-        button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background: #333;
-            color: white;
-            border-radius: 4px;
-            display: none;
-            z-index: 1000;
-        }
-        
-        .toast.show {
-            display: block;
-            animation: slideIn 0.3s ease;
-        }
-        
-        .toast.error {
-            background: #dc3545;
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>创建房间</title>
+        <link rel="icon" href="icons/conference-call.png" />
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                font-family: Arial, sans-serif;
             }
-            to {
-                transform: translateX(0);
-                opacity: 1;
+
+            body {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
             }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>📹 创建房间</h1>
-        
-        <div class="form-group">
-            <label for="roomName">房间名称</label>
-            <input type="text" id="roomName" placeholder="输入房间名称" maxlength="50">
+
+            .container {
+                background: white;
+                padding: 40px;
+                border-radius: 8px;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                width: 100%;
+                max-width: 400px;
+            }
+
+            h1 {
+                text-align: center;
+                margin-bottom: 30px;
+                color: #333;
+            }
+
+            .form-group {
+                margin-bottom: 20px;
+            }
+
+            label {
+                display: block;
+                margin-bottom: 8px;
+                color: #555;
+                font-weight: bold;
+            }
+
+            input[type="text"] {
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 4px;
+                font-size: 14px;
+                transition: border-color 0.3s;
+            }
+
+            input[type="text"]:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+
+            button {
+                width: 100%;
+                padding: 12px;
+                background-color: #667eea;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            }
+
+            button:hover {
+                background-color: #5568d3;
+            }
+
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+
+            .toast {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 15px 25px;
+                background: #333;
+                color: white;
+                border-radius: 4px;
+                display: none;
+                z-index: 1000;
+            }
+
+            .toast.show {
+                display: block;
+                animation: slideIn 0.3s ease;
+            }
+
+            .toast.error {
+                background: #dc3545;
+            }
+
+            @keyframes slideIn {
+                from {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📹 创建房间</h1>
+
+            <div class="form-group">
+                <label for="roomName">房间名称</label>
+                <input
+                    type="text"
+                    id="roomName"
+                    placeholder="输入房间名称"
+                    maxlength="50"
+                />
+            </div>
+
+            <button id="createBtn">创建房间</button>
         </div>
-        
-        <button id="createBtn">创建房间</button>
-    </div>
-    
-    <div class="toast" id="toast"></div>
-    
-    <script src="index.js"></script>
-</body>
+
+        <div class="toast" id="toast"></div>
+
+        <script src="index.js"></script>
+    </body>
 </html>
