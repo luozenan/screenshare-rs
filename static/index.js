@@ -25,11 +25,24 @@ function createRoom() {
         return;
     }
     
-    // 生成房间ID（使用房间名称）
-    const roomId = encodeURIComponent(roomName);
+    // 生成房间ID（使用UUID作为唯一标志）
+    const roomId = generateRoomUuid();
     
     // 跳转到房间页面
     window.location.href = `room.html?room=${roomId}`;
+}
+
+function generateRoomUuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+
+    // 兼容旧浏览器的UUID v4生成
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 }
 
 function showToast(message, type = 'info') {
