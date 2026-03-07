@@ -1,6 +1,7 @@
 // ========== 全局状态 ==========
 let ws = null;
 let roomId = null;
+let roomName = null;
 let userId = null;
 let myStream = null;
 let myVideo = null;
@@ -31,6 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 获取房间ID
   const params = new URLSearchParams(window.location.search);
   roomId = params.get("room");
+  roomName = params.get("name");
 
   if (!roomId) {
     showToast("未指定房间，跳转到首页", "error");
@@ -39,6 +41,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 1500);
     return;
   }
+
+  // 页面标题：房间：{房间名称}
+  const titleRoomName = roomName ? decodeURIComponent(roomName) : "未命名房间";
+  document.title = "房间：" + titleRoomName;
 
   // 显示房间信息
   if (roomInfo) {
@@ -244,7 +250,10 @@ async function stopScreenShare() {
 
 // ========== 复制房间链接 ==========
 function copyRoomLink() {
-  const roomUrl = window.location.href.split("?")[0] + "?room=" + roomId;
+  let roomUrl = window.location.href.split("?")[0] + "?room=" + roomId;
+  if (roomName) {
+    roomUrl += "&name=" + encodeURIComponent(roomName);
+  }
   navigator.clipboard
     .writeText(roomUrl)
     .then(() => {

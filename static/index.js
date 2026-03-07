@@ -27,9 +27,10 @@ function createRoom() {
     
     // 生成房间ID（使用UUID作为唯一标志）
     const roomId = generateRoomUuid();
+    const encodedRoomName = encodeURIComponent(roomName);
     
     // 跳转到房间页面
-    window.location.href = `room.html?room=${roomId}`;
+    window.location.href = `room.html?room=${roomId}&name=${encodedRoomName}`;
 }
 
 function generateRoomUuid() {
