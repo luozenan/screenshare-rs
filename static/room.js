@@ -67,7 +67,15 @@ document.addEventListener("DOMContentLoaded", () => {
 // ========== 信令服务器连接 ==========
 function connectToSignalingServer() {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = protocol + "//" + window.location.host + "/ws";
+  const pathname = window.location.pathname;
+  let wsPath = "/ws";
+  if (pathname.includes("/")) {
+    const pathParts = pathname.split("/").filter((p) => p && p !== "room.html");
+    if (pathParts.length > 0) {
+      wsPath = "/" + pathParts.join("/") + "/ws";
+    }
+  }
+  const wsUrl = protocol + "//" + window.location.host + wsPath;
 
   ws = new WebSocket(wsUrl);
 
@@ -139,7 +147,7 @@ async function startScreenShare() {
       height: { ideal: 1080 },
       frameRate: { ideal: 30, max: 60 }, // 显式设置帧率以提高兼容性
     };
-    
+
     myStream = await navigator.mediaDevices.getDisplayMedia({
       video: videoConstraints,
       audio: true,
@@ -147,17 +155,19 @@ async function startScreenShare() {
 
     const systemAudioTracks = myStream.getAudioTracks();
     const hasSystemAudio = systemAudioTracks.length > 0;
-    
+
     // 统一处理音频轨道：不管有没有系统音频，都移除所有音频轨道再添加静音轨道
     // 这样做是为了避免音频协商导致的兼容性问题
-    myStream.getAudioTracks().forEach(track => {
+    myStream.getAudioTracks().forEach((track) => {
       track.stop();
       myStream.removeTrack(track);
     });
-    
+
     // 添加静音音频轨道供WebRTC传输（某些浏览器要求音频轨道存在）
     try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioContext = new (
+        window.AudioContext || window.webkitAudioContext
+      )();
       const dest = audioContext.createMediaStreamDestination();
       const osc = audioContext.createOscillator();
       const gain = audioContext.createGain();
@@ -285,18 +295,21 @@ async function handleOffer(message) {
 
     // 优化接收的Offer的SDP，强制使用H264
     const optimizedSdp = forceH264Encoding(sdp);
-    
+
     // 设置远程Offer
-    const sessionDesc = new RTCSessionDescription({ type: "offer", sdp: optimizedSdp });
+    const sessionDesc = new RTCSessionDescription({
+      type: "offer",
+      sdp: optimizedSdp,
+    });
     await peerData.pc.setRemoteDescription(sessionDesc);
 
     // 创建Answer
     const answer = await peerData.pc.createAnswer();
-    
+
     // 优化发送的Answer的SDP，强制使用H264
     const optimizedAnswerSdp = forceH264Encoding(answer.sdp);
     answer.sdp = optimizedAnswerSdp;
-    
+
     await peerData.pc.setLocalDescription(answer);
 
     // 发送Answer
@@ -329,9 +342,12 @@ async function handleAnswer(message) {
 
   // 优化接收的Answer的SDP，强制使用H264
   const optimizedSdp = forceH264Encoding(sdp);
-  
+
   const peerData = peers.get(from);
-  const sessionDesc = new RTCSessionDescription({ type: "answer", sdp: optimizedSdp });
+  const sessionDesc = new RTCSessionDescription({
+    type: "answer",
+    sdp: optimizedSdp,
+  });
   await peerData.pc.setRemoteDescription(sessionDesc);
 }
 
@@ -471,21 +487,21 @@ function createPeerConnection(remoteUserId) {
     const peerData = peers.get(remoteUserId);
     if (peerData) {
       const stream = event.streams[0];
-      
+
       // 使用track的trackId而不是stream来进行去重，避免同一轨道多次处理
       const trackId = event.track.id;
       if (!peerData.processedTracks) {
         peerData.processedTracks = new Set();
       }
-      
+
       // 如果已经处理过这个轨道，跳过
       if (peerData.processedTracks.has(trackId)) {
         return;
       }
       peerData.processedTracks.add(trackId);
-      
+
       peerData.stream = stream;
-      
+
       const audioTracks = stream.getAudioTracks();
       const videoTracks = stream.getVideoTracks();
 
@@ -493,7 +509,7 @@ function createPeerConnection(remoteUserId) {
       if (!peerData.video) {
         const label = "共享屏幕 " + remoteUserId.substring(0, 8);
         peerData.video = createVideoElement(label, true);
-        
+
         // 在视频加载完成后检查分辨率
         peerData.video.onloadedmetadata = () => {
           // 视频metadata加载完成
@@ -508,10 +524,9 @@ function createPeerConnection(remoteUserId) {
       // 确保视频开始播放（添加错误处理）
       // 使用Promise.catch而不是catch()来处理，并检查video的paused状态
       if (peerData.video.paused) {
-        peerData.video.play()
-          .catch((err) => {
-            // 视频播放异常
-          });
+        peerData.video.play().catch((err) => {
+          // 视频播放异常
+        });
       }
     }
   };
@@ -539,11 +554,11 @@ function createPeerConnection(remoteUserId) {
 // ========== SDP 编码优化 ==========
 // 将H264编码优先级提到最高以提高跨平台兼容性
 function forceH264Encoding(sdp) {
-  const lines = sdp.split('\n');
+  const lines = sdp.split("\n");
   const result = [];
   let h264PayloadType = null;
-  
-  // 第一遍：找到H264对应的PayloadType 
+
+  // 第一遍：找到H264对应的PayloadType
   for (const line of lines) {
     const rtpmapMatch = line.match(/a=rtpmap:(\d+)\s+H264/i);
     if (rtpmapMatch) {
@@ -551,42 +566,42 @@ function forceH264Encoding(sdp) {
       break;
     }
   }
-  
+
   // 如果找不到H264，直接返回原SDP
   if (!h264PayloadType) {
     return sdp;
   }
-  
+
   // 第二遍：只修改video媒体行，将H264移到最前面
   let inVideoSection = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    
+
     // 检测视频媒体行
-    if (line.startsWith('m=video')) {
+    if (line.startsWith("m=video")) {
       inVideoSection = true;
       // 修改格式列表，将H264的PayloadType移到最前面
-      const parts = line.split(' ');
+      const parts = line.split(" ");
       const mediaLine = parts.slice(0, 3); // m=video 端口 proto
       const formats = parts.slice(3); // 所有PayloadType
-      
+
       // 移除H264的PayloadType
       const h264Index = formats.indexOf(h264PayloadType);
       if (h264Index !== -1) {
         formats.splice(h264Index, 1);
         formats.unshift(h264PayloadType); // 放到最前面
       }
-      
-      result.push(mediaLine.join(' ') + ' ' + formats.join(' '));
-    } else if (line.startsWith('m=') && !line.startsWith('m=video')) {
+
+      result.push(mediaLine.join(" ") + " " + formats.join(" "));
+    } else if (line.startsWith("m=") && !line.startsWith("m=video")) {
       inVideoSection = false;
       result.push(line);
     } else {
       result.push(line);
     }
   }
-  
-  return result.join('\n');
+
+  return result.join("\n");
 }
 
 async function createAndSendOffer(remoteUserId) {
@@ -609,11 +624,11 @@ async function createAndSendOffer(remoteUserId) {
       offerToReceiveVideo: true,
       offerToReceiveAudio: true,
     });
-    
+
     // 强制使用H264编码以提高跨平台兼容性（特别是MacBook Pro）
     const modifiedSdp = forceH264Encoding(offer.sdp);
     offer.sdp = modifiedSdp;
-    
+
     await peerData.pc.setLocalDescription(offer);
 
     sendMessage({
@@ -622,7 +637,7 @@ async function createAndSendOffer(remoteUserId) {
       sdp: offer.sdp,
       roomId: roomId,
     });
-    
+
     // 已向远程用户发送Offer
   } catch (error) {
     showToast("创建Offer失败: " + error.message, "error");
